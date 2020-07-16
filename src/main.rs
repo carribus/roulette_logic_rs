@@ -398,7 +398,11 @@ fn main() {
             println!("Bets placed. Balance = {}", balance);
         }
 
-        match r.spin(&bets) {
+        let now = std::time::SystemTime::now();
+        let results = r.spin(&bets);
+        println!("Game took {}ns to run", now.elapsed().unwrap().as_nanos());
+
+        match results {
             Ok(results) => {
                 println!("Ball dropped on {}", results.0);
                 for (ndx, result) in results.1.iter().enumerate() {
