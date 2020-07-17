@@ -109,19 +109,20 @@ impl RouletteBet {
     }
 
     pub fn win_value(&self) -> u64 {
-        match self.bet_type {
-            RouletteBetType::Straight(_) => self.wager * 36,
-            RouletteBetType::Split(_) => self.wager * 18,
-            RouletteBetType::Street(_) => self.wager * 12,
-            RouletteBetType::Basket(_) => self.wager * 12,
-            RouletteBetType::Topline(_) => self.wager * 9,
-            RouletteBetType::Corner(_) => self.wager * 9,
-            RouletteBetType::Doubleline(_) => self.wager * 6,
-            RouletteBetType::Dozens(_) => self.wager * 3,
-            RouletteBetType::Columns(_) => self.wager * 3,
-            RouletteBetType::EvenOdd(_) => self.wager * 2,
-            RouletteBetType::Highlow(_) => self.wager * 2,
-            RouletteBetType::Redblack(_) => self.wager * 2,
+        self.wager * match self.bet_type {
+            RouletteBetType::Straight(_) => 36,
+            RouletteBetType::Split(_) => 18,
+            RouletteBetType::Street(_) => 12,
+            RouletteBetType::Basket(_) => 12,
+            RouletteBetType::Topline(_) => 9,
+            RouletteBetType::Corner(_) => 9,
+            RouletteBetType::Doubleline(_) => 6,
+            RouletteBetType::Dozens(_) => 3,
+            RouletteBetType::Columns(_) => 3,
+            RouletteBetType::EvenOdd(_) => 2,
+            RouletteBetType::Highlow(_) => 2,
+            RouletteBetType::Redblack(_) => 2,
+
         }
     }
 
@@ -249,7 +250,6 @@ impl Roulette {
         self.validate_bets(bets)?;
 
         // spin
-        // let number = random::<u8>() % 37;
         let number = self.rng.gen_range(0, 36);
         self.history.push(number);
 
