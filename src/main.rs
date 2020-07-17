@@ -154,76 +154,54 @@ struct RouletteEvaluator;
 impl RouletteEvaluator {
     pub fn calculate_winnings<'a>(winning_number: u8, colour: u8, bets: &'a Vec<RouletteBet>) -> Vec<RouletteBetResult<'a>> {
         let mut results = Vec::new();
-        let calc_win = |bet, v: &[u8]| {
-            RouletteBetResult::new(bet, if v.contains(&winning_number) {
+
+        fn calc_win<'a, F>(bet: &'a RouletteBet, f: F) -> RouletteBetResult<'a> where F: FnOnce() -> bool {
+            RouletteBetResult::new(bet, if f() {
                 bet.win_value()
             } else {
                 0
             })
-        };
+        }
 
         for bet in bets {
             results.push(
                 match bet.bet_type() {
-                    RouletteBetType::Straight(v) => {
-                        RouletteBetResult::new(bet, if v == winning_number {
-                            bet.win_value()
-                        } else {
-                            0
-                        })
-                    },
+                    RouletteBetType::Straight(v) => calc_win(bet, || v == winning_number),
                     RouletteBetType::Dozens(v) => {
-                        let mut result = RouletteBetResult::new(bet, 0);
-                        let start = (v-1)*12+1;
-                        for n in start..(start+12) {
-                            if v == n {
-                                result = RouletteBetResult::new(bet, bet.win_value());
-                                break;
+                        calc_win(bet, || {
+                            let start = (v-1)*12+1;
+                            for n in start..(start+12) {
+                                if winning_number == n {
+                                    return true;
+                                }
                             }
-                        }
-                        result
+                            false
+                        })
                     },
                     RouletteBetType::Columns(v) => {
-                        let mut result = RouletteBetResult::new(bet, 0);
-                        let mut n = v;
-                        while n <= 36 {
-                            if winning_number == n {
-                                result = RouletteBetResult::new(bet, bet.win_value());
-                                break;
-                            } 
-                            n += 3;
-                        }
-                        result
-                    },
-                    RouletteBetType::EvenOdd(v) => {
-                        RouletteBetResult::new(bet, if (winning_number % 2) == (v % 2) {
-                            bet.win_value()
-                        } else {
-                            0
+                        calc_win(bet, || {
+                            let mut n = v;
+                            while n <= 36 {
+                                if winning_number == n {
+                                    return true
+                                } 
+                                n += 3;
+                            }
+                            false
                         })
                     },
-                    RouletteBetType::Highlow(v) => {
-                        RouletteBetResult::new(bet, if v == 0 && winning_number >= 1 && winning_number <= 18 {
-                            bet.win_value()
-                        } else if v == 1 && winning_number >= 19 && winning_number <= 36 {
-                            bet.win_value()
-                        } else {
-                            0
-                        })
-                    },
-                    RouletteBetType::Redblack(v) => {
-                        RouletteBetResult::new(bet, if v == colour {
-                            bet.win_value()
-                        } else {
-                            0
-                        })
-                    },
-                    RouletteBetType::Split(v) => calc_win(bet, &v),
-                    RouletteBetType::Street(v) => calc_win(bet, &v),
-                    RouletteBetType::Basket(v) => calc_win(bet, &v),
-                    RouletteBetType::Topline(v) => calc_win(bet, &v),
-                    RouletteBetType::Corner(v) => calc_win(bet, &v),
-                    RouletteBetType::Doubleline(v) => calc_win(bet, &v),
+                    RouletteBetType::EvenOdd(v) => calc_win(bet, || (winning_number % 2) == (v % 2)),
+                    RouletteBetType::Highlow(v) => calc_win(bet, || {
+                        (v == 0 && winning_number >= 1 && winning_number <= 18) ||
+                        (v == 1 && winning_number >= 19 && winning_number <= 36)
+                    }),
+                    RouletteBetType::Redblack(v) => calc_win(bet, || v == colour),
+                    RouletteBetType::Split(v) => calc_win(bet, || v.contains(&winning_number)),
+                    RouletteBetType::Street(v) => calc_win(bet, || v.contains(&winning_number)),
+                    RouletteBetType::Basket(v) => calc_win(bet, || v.contains(&winning_number)),
+                    RouletteBetType::Topline(v) => calc_win(bet, || v.contains(&winning_number)),
+                    RouletteBetType::Corner(v) => calc_win(bet, || v.contains(&winning_number)),
+                    RouletteBetType::Doubleline(v) => calc_win(bet, || v.contains(&winning_number)),
                 }
             )
         }
@@ -251,6 +229,7 @@ impl Roulette {
 
         // spin
         let number = self.rng.gen_range(0, 36);
+        // let number = 36;
         self.history.push(number);
 
         Ok((number, RouletteEvaluator::calculate_winnings(number, Self::get_number_colour(number), &bets)))
@@ -376,13 +355,17 @@ fn main() {
     let mut r = Roulette::new();
     let bets = vec![
         RouletteBet::new(RouletteBetType::Straight(11), 100),
-        RouletteBet::new(RouletteBetType::Straight(10), 100),
+        RouletteBet::new(RouletteBetType::Split([10, 11]), 100),
         RouletteBet::new(RouletteBetType::Corner([7, 8, 10, 11]), 100),
         RouletteBet::new(RouletteBetType::Corner([8, 9, 11, 12]), 100),
         RouletteBet::new(RouletteBetType::Corner([10, 11, 13, 14]), 100),
         RouletteBet::new(RouletteBetType::Corner([11, 12, 14, 15]), 100),
         RouletteBet::new(RouletteBetType::Columns(2), 300),
         RouletteBet::new(RouletteBetType::Basket([0, 1, 2]), 100),
+        RouletteBet::new(RouletteBetType::Dozens(1), 100),
+        RouletteBet::new(RouletteBetType::EvenOdd(0), 100),
+        RouletteBet::new(RouletteBetType::Highlow(1), 100),
+        RouletteBet::new(RouletteBetType::Redblack(1), 100),
     ];
 
     let mut counter = 1;
