@@ -221,6 +221,7 @@ impl RouletteEvaluator {
 #[derive(Debug, Clone)]
 pub struct Roulette {
     history: Vec<u8>,
+    min_bet_size: u64,
     rng: ThreadRng,
 }
 
@@ -228,6 +229,7 @@ impl Roulette {
     pub fn new() -> Self {
         Self {
             history: Vec::new(),
+            min_bet_size: 1,
             rng: thread_rng(),
         }
     }
@@ -250,8 +252,8 @@ impl Roulette {
         for bet in bets {
             if !Self::validate_bet_option(bet.bet_type()) {
                 errors.push(PlaceBetError::InvalidBetOption(bet.clone()))
-            } else if !Self::validate_bet_size(bet) {
-                errors.push(PlaceBetError::MinBetNotSatisfied(bet.clone(), Self::min_bet_for_option(bet.bet_type())))
+            } else if !self.validate_bet_size(bet) {
+                errors.push(PlaceBetError::MinBetNotSatisfied(bet.clone(), self.min_bet_size * Self::min_bet_for_option(bet.bet_type())))
             }
         }
 
@@ -264,18 +266,18 @@ impl Roulette {
 
     fn min_bet_for_option(bet_type: RouletteBetType) -> u64 {
         match bet_type {
-            RouletteBetType::Straight(_v) => 1,
-            RouletteBetType::Split(_v) => 1,
-            RouletteBetType::Street(_v) => 1,
-            RouletteBetType::Basket(_v) => 1,
-            RouletteBetType::Topline(_v) => 1,
-            RouletteBetType::Corner(_v) => 1,
-            RouletteBetType::Doubleline(_v) => 1,
-            RouletteBetType::Dozens(_v) => 1,
-            RouletteBetType::Columns(_v) => 1,
-            RouletteBetType::EvenOdd(_v) => 1,
-            RouletteBetType::Highlow(_v) => 1,
-            RouletteBetType::Redblack(_v) => 1,
+            RouletteBetType::Straight(_) => 1,
+            RouletteBetType::Split(_) => 1,
+            RouletteBetType::Street(_) => 1,
+            RouletteBetType::Basket(_) => 1,
+            RouletteBetType::Topline(_) => 1,
+            RouletteBetType::Corner(_) => 1,
+            RouletteBetType::Doubleline(_) => 1,
+            RouletteBetType::Dozens(_) => 1,
+            RouletteBetType::Columns(_) => 1,
+            RouletteBetType::EvenOdd(_) => 1,
+            RouletteBetType::Highlow(_) => 1,
+            RouletteBetType::Redblack(_) => 1,
         }
     }
 
@@ -345,8 +347,8 @@ impl Roulette {
         }
     }
 
-    fn validate_bet_size(bet: &RouletteBet) -> bool {
-        Self::min_bet_for_option(bet.bet_type()) <= bet.wager()
+    fn validate_bet_size(&self, bet: &RouletteBet) -> bool {
+        Self::min_bet_for_option(bet.bet_type()) & self.min_bet_size <= bet.wager()
     }
 
     fn get_number_colour(number: u8) -> u8 {
@@ -370,6 +372,48 @@ mod test {
             assert_eq!(rbs.win_value(), i*36);
             assert_eq!(rbc.win_value(), i*9)
         }
+    }
+
+    #[test]
+    fn rouletteeval_calc_winnings() {
+        let wager = 10;
+        let bets = vec![
+            RouletteBet::new(RouletteBetType::Straight(1), wager),
+            RouletteBet::new(RouletteBetType::Split([1, 2]), wager),
+            RouletteBet::new(RouletteBetType::Street([1, 2, 3]), wager),
+            RouletteBet::new(RouletteBetType::Basket([0, 1, 2]), wager),
+            RouletteBet::new(RouletteBetType::Topline([0, 1, 2, 3]), wager),
+            RouletteBet::new(RouletteBetType::Corner([1, 2, 4, 5]), wager),
+            RouletteBet::new(RouletteBetType::Doubleline([1, 2, 3, 4, 5, 6]), wager),
+            RouletteBet::new(RouletteBetType::Dozens(1), wager),
+            RouletteBet::new(RouletteBetType::Columns(1), wager),
+            RouletteBet::new(RouletteBetType::EvenOdd(0), wager),
+            RouletteBet::new(RouletteBetType::Highlow(0), wager),
+            RouletteBet::new(RouletteBetType::Redblack(0), wager),
+        ];
+
+        let results = RouletteEvaluator::calculate_winnings(2, 0, &bets);
+        let mut winnings = 0;
+
+        for res in results {
+            match res.bet().bet_type() {
+                RouletteBetType::Straight(_) => assert_eq!(res.win(), 0),
+                RouletteBetType::Split(_) => assert_eq!(res.win(), 180),
+                RouletteBetType::Street(_) => assert_eq!(res.win(), 120),
+                RouletteBetType::Basket(_) => assert_eq!(res.win(), 120),
+                RouletteBetType::Topline(_) => assert_eq!(res.win(), 90),
+                RouletteBetType::Corner(_) => assert_eq!(res.win(), 90),
+                RouletteBetType::Doubleline(_) => assert_eq!(res.win(), 60),
+                RouletteBetType::Dozens(_) => assert_eq!(res.win(), 30),
+                RouletteBetType::Columns(_) => assert_eq!(res.win(), 0),
+                RouletteBetType::EvenOdd(_) => assert_eq!(res.win(), 20),
+                RouletteBetType::Highlow(_) => assert_eq!(res.win(), 20),
+                RouletteBetType::Redblack(_) => assert_eq!(res.win(), 20),                
+            }
+            winnings += res.win();
+        }
+
+        assert_eq!(winnings, 750);
     }
 
     #[test]
