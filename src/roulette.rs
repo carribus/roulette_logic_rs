@@ -346,7 +346,7 @@ impl Roulette {
     }
 
     fn validate_bet_size(bet: &RouletteBet) -> bool {
-        true
+        Self::min_bet_for_option(bet.bet_type()) <= bet.wager()
     }
 
     fn get_number_colour(number: u8) -> u8 {
