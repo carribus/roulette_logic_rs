@@ -584,4 +584,21 @@ mod test {
         assert_eq!(Roulette::validate_bet_option(RouletteBetType::Redblack(2)), false);
         assert_eq!(Roulette::validate_bet_option(RouletteBetType::Redblack(3)), false);
     }
+
+    #[test]
+    fn valid_bettype_voisons_du_zero() {
+        let vdz = vec![
+            RouletteBetType::Basket([0, 2, 3]),
+            RouletteBetType::Split([4, 7]),
+            RouletteBetType::Split([12, 15]),
+            RouletteBetType::Split([18, 21]),
+            RouletteBetType::Split([19, 22]),
+            RouletteBetType::Split([32, 35]),
+            RouletteBetType::Corner([25, 26, 28, 29]),
+        ];
+
+        for bet in vdz {
+            assert_eq!(Roulette::validate_bet_option(bet), true);
+        }
+    }
 }
