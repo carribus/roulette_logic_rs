@@ -239,10 +239,13 @@ impl Roulette {
 
         // spin
         let number = self.rng.gen_range(0, 36);
-        // let number = 36;
         self.history.push(number);
 
         Ok((number, RouletteEvaluator::calculate_winnings(number, Self::get_number_colour(number), &bets)))
+    }
+
+    pub fn history(&self) -> &[u8] {
+        self.history.as_slice()
     }
 
     fn validate_bets(&self, bets: &Vec<RouletteBet>) -> Result<(), Vec<PlaceBetError>> {
@@ -362,6 +365,30 @@ impl Roulette {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn spin_and_history_test() {
+        let mut r = Roulette::new();
+        let mut history = Vec::new();
+
+        for _ in 0..10 {
+            match r.spin(&vec![]) {
+                Ok((num, _results)) => {
+                    history.push(num);
+                },
+                Err(_) => panic!("Spin failed for some reason!"),
+            }
+        }
+
+        // validate history
+        let history_check = r.history();
+        assert_eq!(history_check.len(), history.len());
+        for i in 0..history.len() {
+            let a = history[i];
+            let b = history_check[i];
+            assert_eq!(a, b);
+        }
+    }
 
     #[test]
     fn roulettebet_win_value() {
