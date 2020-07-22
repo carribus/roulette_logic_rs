@@ -6,7 +6,10 @@ fn calculate_total_bet(bets: &Vec<RouletteBet>) -> u64 {
     bets.iter().fold(0, |acc, bet| acc + bet.wager())
 }
 
+
 fn main() {
+
+    // Simulate various bet types, starting from a balance 10k.
     let mut balance = 10000;
     let mut r = Roulette::new();
     let bets = vec![
@@ -18,16 +21,22 @@ fn main() {
         RouletteBet::new(RouletteBetType::Corner([11, 12, 14, 15]), 100),
         RouletteBet::new(RouletteBetType::Columns(2), 300),
         RouletteBet::new(RouletteBetType::Basket([0, 1, 2]), 100),
-        RouletteBet::new(RouletteBetType::Dozens(1), 100),
-        RouletteBet::new(RouletteBetType::EvenOdd(0), 100),
+        RouletteBet::new(RouletteBetType::Topline([0, 1, 2, 3]), 100),
+        RouletteBet::new(RouletteBetType::Dozens(1), 100), 
+        RouletteBet::new(RouletteBetType::EvenOdd(0), 100), 
         RouletteBet::new(RouletteBetType::Highlow(1), 100),
         RouletteBet::new(RouletteBetType::Redblack(1), 100),
         RouletteBet::new(RouletteBetType::Doubleline([25, 26, 27, 28, 29, 30]), 100),
     ];
 
+
     let mut counter = 1;
     let mut highest_balance = balance;
+
+    // Loop till we are out of balance or reached the highest balance.
     loop {
+        // Verify enough funds, grab all the bets and spin. Add to the balance the winning results. 
+
         println!("\nGame {}", counter);
         let total_bet = calculate_total_bet(&bets);
         if total_bet > balance {
@@ -38,6 +47,7 @@ fn main() {
             println!("Bets placed. Balance = {}", balance);
         }
 
+        
         let now = std::time::SystemTime::now();
         let results = r.spin(&bets);
         println!("Game took {}ns to run", now.elapsed().unwrap().as_nanos());

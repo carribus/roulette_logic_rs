@@ -18,6 +18,7 @@ impl fmt::Display for PlaceBetError {
     }
 }
 
+/// Bet Types, defined by the type of bet, with the variant always being u8, but in some cases requiring an array of numbers to be inserted.
 #[derive(Debug, Copy, Clone)]
 pub enum RouletteBetType {
     /// Single number for the bet
@@ -44,7 +45,7 @@ pub enum RouletteBetType {
     /// 1 for 1-12, 2 for 13-24, 3 for 25-36
     Dozens(u8),
 
-    /// Indicate the column based on the lowest number in that column (1, 2 or 3)
+    /// Indicate the column based on the lowest number in that column (1, 2 or 3 to match columns under 34,35,36)
     Columns(u8), 
 
     /// 0 for even, 1 for odd
@@ -56,6 +57,7 @@ pub enum RouletteBetType {
     /// 0 for red, 1 for black
     Redblack(u8),
 }
+
 
 impl fmt::Display for RouletteBetType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -88,6 +90,7 @@ impl fmt::Display for RouletteBetType {
     }
 }
 
+/// Definition of a bet. 
 #[derive(Debug, Clone, Copy)]
 pub struct RouletteBet {
     bet_type: RouletteBetType,
@@ -108,6 +111,7 @@ impl RouletteBet {
         }
     }
 
+    /// The win value is the multiplier. In other words if I bet on Even a bet of 10, i get 20. 
     pub fn win_value(&self) -> u64 {
         self.wager * match self.bet_type {
             RouletteBetType::Straight(_) => 36,
@@ -135,6 +139,7 @@ impl RouletteBet {
     }
 }
 
+/// The result of a bet. Contains the bet itself and the winning amount. The responsibility of the winning is in the struct RouletteEvaluator
 pub struct RouletteBetResult<'a> {
     bet: &'a RouletteBet,
     win: u64,
@@ -157,12 +162,19 @@ impl<'a> RouletteBetResult<'a> {
     }
 }
 
+/// This struct determines the winners (or loosers) in a set of input bets.
 struct RouletteEvaluator;
 
 impl RouletteEvaluator {
-    pub fn calculate_winnings<'a>(winning_number: u8, colour: u8, bets: &'a Vec<RouletteBet>) -> Vec<RouletteBetResult<'a>> {
+
+    // PR: Wouldn't it be a better idea to shift responsibility of colour in here? I would remove colour as a parameter
+    // to the function and calculate it inside this method. 
+    pub fn calculate_winnings<'a>(winning_number: u8, bets: &'a Vec<RouletteBet>) -> Vec<RouletteBetResult<'a>> {
         let mut results = Vec::new();
 
+        let colour = RouletteEvaluator::get_number_colour(winning_number);
+
+        /// Takes a roulette bet and the function for that bet type to evaluate it. 
         fn calc_win<'a, F>(bet: &'a RouletteBet, f: F) -> RouletteBetResult<'a> where F: FnOnce() -> bool {
             RouletteBetResult::new(bet, if f() {
                 bet.win_value()
@@ -174,36 +186,37 @@ impl RouletteEvaluator {
         for bet in bets {
             results.push(
                 match bet.bet_type() {
-                    RouletteBetType::Straight(v) => calc_win(bet, || v == winning_number),
-                    RouletteBetType::Dozens(v) => {
-                        calc_win(bet, || {
-                            let start = (v-1)*12+1;
-                            for n in start..(start+12) {
-                                if winning_number == n {
-                                    return true;
-                                }
-                            }
-                            false
-                        })
-                    },
-                    RouletteBetType::Columns(v) => {
-                        calc_win(bet, || {
-                            let mut n = v;
-                            while n <= 36 {
-                                if winning_number == n {
-                                    return true
-                                } 
-                                n += 3;
-                            }
-                            false
-                        })
-                    },
-                    RouletteBetType::EvenOdd(v) => calc_win(bet, || (winning_number % 2) == (v % 2)),
-                    RouletteBetType::Highlow(v) => calc_win(bet, || {
-                        (v == 0 && winning_number >= 1 && winning_number <= 18) ||
+                    RouletteBetType::Straight(v) => calc_win(bet, || v == winning_number), // Just match the number. 
+
+                    // Determine if the winning number falls in the chosen dozen (1 for 1-12, 2 for 13-24, 3 for 25-36)
+                    // PR: Wouldn't it be simpler to do (winning_number-1)/12 == v - 1 ? 
+                    // For example, if dozen 3 is chosen and 25 comes up: 25 - 1 / 12 = 3 - 1 // We have a winner 
+                    // For example, if dozen 1 is chosen and 1 comes up: 1 - 1 / 12 = 1 - 1 // We have a winner
+                    // For example, if dozen 1 is chosen and 0 comes up: 0 - 1 / 12 <> 1 - 1 // We have a loser
+                    RouletteBetType::Dozens(v) => calc_win(bet, || (winning_number > 0 && (winning_number-1)/12 == v - 1)), 
+                   
+
+                    // Indicate the column based on the lowest number in that column (1, 2 or 3 to match columns under 34,35,36)
+                    // PR: Wouldn't it be easier if we do: winning_number > 0 && winning_number % 3 = (v % 3)
+                    // For example: if column 1 is chosen, and 7 comes up 7 % 3 = 1 % 3
+                    // For example: if column 3 is chosen, and 33 comes up 33 % 3 = 3 % 3
+                    RouletteBetType::Columns(v) => calc_win(bet, || (winning_number > 0 && winning_number % 3 == v % 3)),
+                        
+                    // Match modulo 2 of winning number and whether it was even (0) or odd(1) 
+                    // PR: v%2 is superflous. we can just have (winning_number % 2) == v 
+                    RouletteBetType::EvenOdd(v) => calc_win(bet, || (winning_number % 2) == v), 
+
+
+                    // 0 = low, 1 = high. Low is between 1 - 18, high 19 - 36. Zero not included (neither high nor low)
+                    RouletteBetType::Highlow(v) => calc_win(bet, || { 
+                        (v == 0 && winning_number >= 1 && winning_number <= 18) || 
                         (v == 1 && winning_number >= 19 && winning_number <= 36)
                     }),
+
+                    // Just match on colour
                     RouletteBetType::Redblack(v) => calc_win(bet, || v == colour),
+
+                    // In all the following types we just determine whether the number exists within the input array of chosen numbers
                     RouletteBetType::Split(v) => calc_win(bet, || v.contains(&winning_number)),
                     RouletteBetType::Street(v) => calc_win(bet, || v.contains(&winning_number)),
                     RouletteBetType::Basket(v) => calc_win(bet, || v.contains(&winning_number)),
@@ -216,8 +229,18 @@ impl RouletteEvaluator {
 
         results
     }
+
+    fn get_number_colour(number: u8) -> u8 {
+        match number {
+            // PR: what about zero? I would add zero as another colour, as this can affect badly the redBlack bet type.
+            0 => 2,
+            1 | 3 | 5 | 7 | 9 | 12 | 14 | 16 | 18 | 19 | 21 | 23 | 25 | 27 | 30 | 32 | 34 | 36 => 0,
+            _ => 1,
+        }
+    }
 }
 
+/// The roulette engine implementation. All the bet history is stored here. 
 #[derive(Debug, Clone)]
 pub struct Roulette {
     history: Vec<u8>,
@@ -234,6 +257,7 @@ impl Roulette {
         }
     }
 
+    /// The roulette spin. Takes a list of bets in, picks the winning number, and returns the results (and any errors)
     pub fn spin<'a>(&mut self, bets: &'a Vec<RouletteBet>) -> Result<(u8, Vec<RouletteBetResult<'a>>), Vec<PlaceBetError>> {
         self.validate_bets(bets)?;
 
@@ -241,7 +265,7 @@ impl Roulette {
         let number = self.rng.gen_range(0, 36);
         self.history.push(number);
 
-        Ok((number, RouletteEvaluator::calculate_winnings(number, Self::get_number_colour(number), &bets)))
+        Ok((number, RouletteEvaluator::calculate_winnings(number, &bets)))
     }
 
     pub fn history(&self) -> &[u8] {
@@ -288,12 +312,16 @@ impl Roulette {
     /// *NOTE*: The logic expects the elements in a &[u8] array of values to be sorted in ascending order
     fn validate_bet_option(bet_type: RouletteBetType) -> bool {
         match bet_type {
+            // Staight numbers are easy: any number (including zero) smaller or equal to 36.
             RouletteBetType::Straight(v) => v <= 36,
+
+
             RouletteBetType::Split(v) => {
+
                 // range and duplicate check
                 (v[0] != v[1] && (v[0] <= 35 && v[1] <= 36) && v[1] > v[0]) 
                 &&
-                // splits with zero
+                // splits with zero can only be combined with 1,2,3
                 (
                     v[0] == 0 && (v[1] == 1 || v[1] == 2 || v[1] == 3)
                 ) 
@@ -305,12 +333,15 @@ impl Roulette {
                         (v[1] % 3 == 0 && v[1] - v[0] == 1 || v[1] - v[0] == 3) ||
                         // left edge
                         (v[0] % 3 == 1 && v[1] - v[0] == 1 || v[1] - v[0] == 3)
+                        
                     )
                 ) 
                 ||
                 // bottom edge (34, 35, 36)
                 (v[0] >= 34 && v[1] - v[0] == 1)
             }
+
+            // A street has to always start at the first column, and the other two numbers need to be 1 value apart.
             RouletteBetType::Street(v) => {
                 v[0] > 0 && 
                 v[0] <= 34 && 
@@ -318,14 +349,20 @@ impl Roulette {
                 v[1] - v[0] == 1 &&
                 v[2] - v[1] == 1
             }
+
+            // Numbers covering either 0,1,2 or 0,2,3
             RouletteBetType::Basket(v) => {
                 v[0] == 0 &&
                 ((v[1] == 1 && v[2] == 2) ||
                 (v[1] == 2 && v[2] == 3))
             }
+
+            // Topline is always exactly 0123
             RouletteBetType::Topline(v) => {
                 v[0] == 0 && v[1] == 1 && v[2] == 2 && v[3] == 3
             }
+
+            // Corners: Cannot start with zero, they can only start on 1st, 2nd column, rows should have a difference of 3, columns a difference of 1
             RouletteBetType::Corner(v) => {
                 v[0] > 0 &&
                 (v[0] % 3 != 0) &&
@@ -334,6 +371,9 @@ impl Roulette {
                 v[3] - v[1] == 3 &&
                 v[2] - v[0] == 3
             }
+
+
+            // Doublle line is essentially two streets. 
             RouletteBetType::Doubleline(v) => {
                 let mut slice1: [u8; 3] = Default::default();
                 let mut slice2: [u8; 3] = Default::default();
@@ -342,8 +382,12 @@ impl Roulette {
                 Self::validate_bet_option(RouletteBetType::Street(slice1)) &&
                 Self::validate_bet_option(RouletteBetType::Street(slice2))
             },
+
+            // Can only have values of 1,2,3
             RouletteBetType::Dozens(v) => v >= 1 && v <= 3,
             RouletteBetType::Columns(v) => v >= 1 && v <= 3,
+
+            // Can only have values of 0, 1
             RouletteBetType::EvenOdd(v) => v <= 1,
             RouletteBetType::Highlow(v) => v <= 1,
             RouletteBetType::Redblack(v) => v <= 1,
@@ -352,13 +396,6 @@ impl Roulette {
 
     fn validate_bet_size(&self, bet: &RouletteBet) -> bool {
         Self::min_bet_for_option(bet.bet_type()) & self.min_bet_size <= bet.wager()
-    }
-
-    fn get_number_colour(number: u8) -> u8 {
-        match number {
-            1 | 3 | 5 | 7 | 9 | 12 | 14 | 16 | 18 | 19 | 21 | 23 | 25 | 27 | 30 | 32 | 34 | 36 => 0,
-            _ => 1,
-        }
     }
 }
 
@@ -416,10 +453,10 @@ mod test {
             RouletteBet::new(RouletteBetType::Columns(1), wager),
             RouletteBet::new(RouletteBetType::EvenOdd(0), wager),
             RouletteBet::new(RouletteBetType::Highlow(0), wager),
-            RouletteBet::new(RouletteBetType::Redblack(0), wager),
+            RouletteBet::new(RouletteBetType::Redblack(1), wager), // PR: Error here. 0 is red, not black. whilst 2 is red. Fixed this.
         ];
 
-        let results = RouletteEvaluator::calculate_winnings(2, 0, &bets);
+        let results = RouletteEvaluator::calculate_winnings(2, &bets);
         let mut winnings = 0;
 
         for res in results {
